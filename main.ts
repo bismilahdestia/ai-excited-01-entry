@@ -6,14 +6,17 @@
 // gate: at most 1 MiB, at most 1024 by 1024 pixels, dimensions read
 // from the first Start Of Frame segment. A file that fails a check
 // stops the run with an error instead of submitting something the
-// gate would refuse. The copy is deterministic, so both grading runs
+// gate would refuse. The output directory is created if it does not
+// exist yet, and after copying the written file is read back and
+// compared byte for byte with the source, so a partial or corrupted
+// write fails the run. The copy is deterministic, so both grading runs
 // write the identical bytes.
 //
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for
 // /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -66,5 +69,12 @@ if (width > 1024 || height > 1024) {
 if (buf.length > 1048576) {
   throw new Error(`entry.png is ${buf.length} bytes, over the 1 MiB gate`);
 }
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, buf);
+// Read the written file back and confirm it matches the source bytes
+// exactly; a partial or corrupted write fails the run instead of
+// submitting bytes the gate would refuse.
+if (!readFileSync(out).equals(buf)) {
+  throw new Error(`read-back check failed: ${out} differs from entry.png`);
+}
 console.log(`wrote ${out} (${width}x${height}, ${buf.length} bytes)`);
